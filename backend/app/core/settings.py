@@ -4,23 +4,31 @@ from functools import lru_cache
 from typing import Any
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, EnvSettingsSource, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    SettingsConfigDict,
+)
+
+
+def _tolerant_decode(value: Any) -> Any:
+    """Return parsed JSON if possible, otherwise the raw string — lets field
+    validators do their own conversion (e.g. CSV -> list)."""
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return value
 
 
 class _CsvEnvSource(EnvSettingsSource):
-    """Custom env source that allows non-JSON complex values (e.g. CSV strings).
-
-    pydantic-settings >=2.x tries to JSON-decode complex fields (list, dict, etc.)
-    before validators run.  This subclass falls back to returning the raw string on
-    JSON parse failure so that field validators can do their own conversion (e.g.
-    splitting a comma-separated string into a list).
-    """
-
     def decode_complex_value(self, field_name: str, field: Any, value: Any) -> Any:
-        try:
-            return json.loads(value)
-        except (json.JSONDecodeError, TypeError):
-            return value  # pass raw string; field validators will handle it
+        return _tolerant_decode(value)
+
+
+class _CsvDotEnvSource(DotEnvSettingsSource):
+    def decode_complex_value(self, field_name: str, field: Any, value: Any) -> Any:
+        return _tolerant_decode(value)
 
 
 class Settings(BaseSettings):
@@ -43,8 +51,23 @@ class Settings(BaseSettings):
         return v
 
     @classmethod
-    def settings_customise_sources(cls, settings_cls, **kwargs):  # type: ignore[override]
-        return (_CsvEnvSource(settings_cls),)
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):  # type: ignore[override]
+        # Replace the default env source with one that tolerates non-JSON complex values
+        # (so CSV strings survive to reach field validators). Preserve dotenv + init +
+        # file-secret sources in their normal precedence order.
+        return (
+            init_settings,
+            _CsvEnvSource(settings_cls),
+            _CsvDotEnvSource(settings_cls),
+            file_secret_settings,
+        )
 
 
 @lru_cache
