@@ -17,8 +17,18 @@ coverage/
 
 # Env
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Credentials / keys
+secrets.json
+secrets.toml
+credentials.json
+*.pem
+*.key
+
+# Claude Code
+.claude/
 
 # OS / IDE
 .DS_Store
