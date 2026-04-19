@@ -345,3 +345,12 @@ INSERT INTO country_segments (iso3, as_of_year, hdi_value, segment) VALUES
   ('ZWE', 2011, 0.45, 'NODATA'::segment_code)
 ON CONFLICT (iso3, as_of_year) DO NOTHING;
 
+-- Dev-only tenancy seed. Creates one internal org, one client org, and a system org for service accounts.
+-- Users must be created via Studio UI; their memberships are added separately (see Task 8 manual steps).
+
+INSERT INTO organisations (id, name, status) VALUES
+  ('00000000-0000-0000-0000-0000000000a1', 'Anchor Point Risk (internal)', 'internal'::organisation_status),
+  ('00000000-0000-0000-0000-0000000000b1', 'Sample Client Bank',          'client'::organisation_status),
+  ('00000000-0000-0000-0000-0000000000c1', 'System Service Accounts',     'system'::organisation_status)
+ON CONFLICT (id) DO NOTHING;
+
