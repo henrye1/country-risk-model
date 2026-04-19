@@ -37,6 +37,8 @@ packages = ["app"]
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["integration: requires a linked Supabase cloud dev project"]
+addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 100
