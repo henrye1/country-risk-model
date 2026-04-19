@@ -1,0 +1,15 @@
+code,name,category,direction,is_quantitative,description
+dcpi_5_adj,Inflation 5 year average,Economic,higher_worse,True,Average CPI % change over 5 years.
+nom_rir_vol,Nominal Interest Rate Volatility,Economic,higher_worse,True,Volatility of nominal interest rates.
+gdp_capita,GDP per Capita,Economic,higher_better,True,GDP per head (US$).
+growth_vol,Growth Volatility,Economic,higher_worse,True,Stdev of Real GDP % change over 5 years.
+macro_var,Macroeconomic,Economic,higher_better,False,Qualitative macroeconomic stability score.
+atf,Access to Finance,Currency,higher_better,False,Qualitative access-to-finance score.
+dt,Debt Trend,Currency,higher_worse,True,3-year trend in foreign debt to GDP.
+fdg_3yr,Foreign Debt to GDP 3 year average,Currency,higher_worse,True,Average foreign debt / GDP over 3 years.
+cof,Cost of Funds,Finance,higher_worse,True,Money market interest rate (%).
+pr,Political Risk Environment,Political,higher_better,False,Qualitative political risk score.
+rol,Rule of Law,Business Risk,higher_better,False,World Governance Indicator: Rule of Law.
+db,Doing Business,Business Risk,higher_better,False,World Bank Doing Business qualitative score.
+sr,Security Risk,Risk,higher_better,False,Global Insights security risk score.
+debt_service_ratio,Debt Service Ratio 1 year,Currency,higher_worse,True,Debt service due as % of exports + remittances.
