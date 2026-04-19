@@ -3,7 +3,7 @@ import httpx
 import pytest
 import respx
 
-from app.ingestion.world_bank import WorldBankClient, WorldBankError
+from app.ingestion.world_bank import IndicatorArchivedError, WorldBankClient, WorldBankError
 
 
 @pytest.fixture
@@ -97,3 +97,16 @@ def test_fetch_indicator_raises_on_invalid_shape(client):
 
     with pytest.raises(WorldBankError, match="unexpected response shape"):
         client.fetch_indicator_for_year(indicator_id="NY.GDP.PCAP.CD", year=2021)
+
+
+@respx.mock
+def test_fetch_indicator_raises_archived_when_wb_reports_indicator_deleted(client):
+    # The WB API returns `[{"message": [...]}]` when an indicator has been archived/removed.
+    respx.get("https://api.worldbank.org/v2/country/all/indicator/IC.BUS.EASE.XQ").respond(
+        200,
+        json=[{"message": [{"id": "175", "key": "Invalid format",
+                            "value": "The indicator was not found. It may have been deleted or archived."}]}],
+    )
+
+    with pytest.raises(IndicatorArchivedError, match="archived"):
+        client.fetch_indicator_for_year(indicator_id="IC.BUS.EASE.XQ", year=2021)
