@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoginPage } from "./features/auth/LoginPage";
 import { RequireAuth } from "./features/auth/RequireAuth";
 import { AppShell } from "./components/AppShell";
+import { CountryDetailPage } from "./features/countries/CountryDetailPage";
 import { CountryListPage } from "./features/countries/CountryListPage";
 
 function LandingRedirect() {
@@ -26,6 +27,16 @@ export const router = createBrowserRouter([
       <RequireAuth>
         <AppShell>
           <CountryListPage />
+        </AppShell>
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/countries/:iso3",
+    element: (
+      <RequireAuth>
+        <AppShell>
+          <CountryDetailPage />
         </AppShell>
       </RequireAuth>
     ),
