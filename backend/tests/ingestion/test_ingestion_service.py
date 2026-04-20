@@ -43,7 +43,7 @@ class FakeRepo:
 def test_ingest_world_bank_maps_variables_and_inserts_rows():
     payloads = {
         ("NY.GDP.PCAP.CD", 2021): {"USA": 70000.0, "ZAF": 6000.0, "ZZZ": 999.0},
-        ("RL.EST", 2021): {"USA": 1.5, "ZAF": 0.2},
+        ("GOV_WGI_RL.EST", 2021): {"USA": 1.5, "ZAF": 0.2},
     }
     wb = FakeWBClient(payloads)
     repo = FakeRepo(known_iso3={"USA", "ZAF"})

@@ -14,13 +14,15 @@ from typing import Literal
 SourceTag = Literal["WB", "WGI"]
 
 # Single-year mappings. Extend this dict when adding indicators.
+# NOTE: WB renamed WGI indicators (old codes RL.EST, PV.EST etc are archived;
+# new codes are prefixed GOV_WGI_). Doing Business (IC.BUS.EASE.XQ) is
+# permanently discontinued — no WB replacement; source via EIU later.
 WORLD_BANK_SOURCES: dict[str, tuple[SourceTag, str]] = {
-    "gdp_capita":          ("WB",  "NY.GDP.PCAP.CD"),      # GDP per capita (current US$)
-    "rol":                 ("WGI", "RL.EST"),              # WGI: Rule of Law, estimate
-    "pr":                  ("WGI", "PV.EST"),              # WGI: Political Stability estimate
-    "db":                  ("WB",  "IC.BUS.EASE.XQ"),      # Ease of doing business (discontinued 2022, historical still available)
-    "cof":                 ("WB",  "FR.INR.LEND"),         # Lending interest rate (%)
-    "debt_service_ratio":  ("WB",  "DT.TDS.DECT.EX.ZS"),   # Total debt service (% of exports of goods, services and primary income)
+    "gdp_capita":          ("WB",  "NY.GDP.PCAP.CD"),        # GDP per capita (current US$)
+    "rol":                 ("WGI", "GOV_WGI_RL.EST"),        # WGI: Rule of Law, -2.5 to +2.5
+    "pr":                  ("WGI", "GOV_WGI_PV.EST"),        # WGI: Political Stability, -2.5 to +2.5
+    "cof":                 ("WB",  "FR.INR.LEND"),           # Lending interest rate (%)
+    "debt_service_ratio":  ("WB",  "DT.TDS.DECT.EX.ZS"),     # Total debt service (% of exports)
 }
 
 
