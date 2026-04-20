@@ -32,6 +32,11 @@ class SnapshotRepoProtocol(Protocol):
     def wipe_draft_scores(self, snapshot_id: UUID) -> None: ...
     def insert_country_scores(self, snapshot_id: UUID, rows: list[CountryScoreRow]) -> int: ...
     def insert_driver_scores(self, snapshot_id: UUID, rows: list[DriverScoreRow]) -> int: ...
+    def publish(self, snapshot_id: UUID, published_by: UUID | None, notes: str | None) -> dict: ...
+    def archive(self, snapshot_id: UUID) -> dict: ...
+    def list_snapshots(self, statuses: list[str] | None, limit: int) -> list[dict]: ...
+    def latest_published_snapshot(self) -> dict | None: ...
+    def country_scores_for(self, snapshot_id: UUID) -> list[dict]: ...
 
 
 class SegmentRepoProtocol(Protocol):
@@ -183,3 +188,46 @@ class SnapshotService:
             countries_skipped_no_model=skipped_no_model,
             countries_skipped_no_segment=skipped_no_segment,
         )
+
+    def publish(self, snapshot_id: UUID, published_by: UUID | None, notes: str | None) -> dict:
+        return self._snapshots.publish(snapshot_id, published_by=published_by, notes=notes)
+
+    def archive(self, snapshot_id: UUID) -> dict:
+        return self._snapshots.archive(snapshot_id)
+
+    def list(self, statuses: list[str] | None = None, limit: int = 50) -> list[dict]:
+        return self._snapshots.list_snapshots(statuses=statuses, limit=limit)
+
+    def diff_against_latest_published(self, snapshot_id: UUID) -> dict:
+        """Return diff rows comparing this snapshot's country_scores against
+        the latest published snapshot. If none has been published yet,
+        previous_snapshot_id is None and all deltas are None."""
+        current_rows = self._snapshots.country_scores_for(snapshot_id)
+        previous = self._snapshots.latest_published_snapshot()
+
+        previous_id = previous["id"] if previous else None
+        previous_rows = (
+            self._snapshots.country_scores_for(UUID(previous["id"])) if previous else []
+        )
+
+        previous_by_iso3 = {r["iso3"]: r for r in previous_rows}
+
+        diff_rows = []
+        for cur in sorted(current_rows, key=lambda r: r["iso3"]):
+            prev = previous_by_iso3.get(cur["iso3"])
+            prev_score = float(prev["final_score"]) if prev else None
+            new_score = float(cur["final_score"])
+            delta = new_score - prev_score if prev_score is not None else None
+            diff_rows.append({
+                "iso3": cur["iso3"],
+                "segment": cur["segment"],
+                "new_score": new_score,
+                "previous_score": prev_score,
+                "delta": delta,
+            })
+
+        return {
+            "snapshot_id": snapshot_id,
+            "previous_snapshot_id": UUID(previous_id) if previous_id else None,
+            "rows": diff_rows,
+        }
