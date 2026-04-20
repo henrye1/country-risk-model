@@ -43,6 +43,11 @@ class TrainedModel:
     qual_variable_codes: tuple[str, ...]
     training_data_hash: str
     fit_metrics: dict[str, float] = field(default_factory=dict)
+    # Blending coefs (second-stage Ridge that combines quant_score + qual_score → final).
+    # All None means no blending; final = quant + qual (back-compat with pre-calibration models).
+    final_intercept: float | None = None
+    final_w_quant: float | None = None
+    final_w_qual: float | None = None
 
 
 @dataclass(frozen=True)

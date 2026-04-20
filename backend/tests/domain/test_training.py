@@ -64,6 +64,19 @@ def test_train_model_returns_trained_model_with_all_components():
     assert len(model.training_data_hash) == 64
 
 
+def test_train_model_includes_blending_coefs():
+    """The second-stage Ridge combining quant_score + qual_score must be fitted."""
+    data = _synthetic_training_data()
+    model = train_model_for_segment(
+        "HIGH", data, ("gdp_capita",), ("pr", "rol"), n_buckets=3, ridge_alpha=1.0,
+    )
+    assert model.final_intercept is not None
+    assert model.final_w_quant is not None
+    assert model.final_w_qual is not None
+    # The blending Ridge should never do worse than qual-Ridge alone.
+    assert model.fit_metrics["r2"] >= model.fit_metrics["r2_qual_ridge_only"] - 1e-9
+
+
 def test_train_model_reproducible_for_same_input():
     data = _synthetic_training_data()
     m1 = train_model_for_segment(

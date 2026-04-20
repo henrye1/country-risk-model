@@ -80,10 +80,24 @@ def score_country(
             contribution=contribution,
         ))
 
+    # Final score: blending Ridge if present, else fall back to additive (legacy).
+    if (
+        model.final_intercept is not None
+        and model.final_w_quant is not None
+        and model.final_w_qual is not None
+    ):
+        final_score = (
+            model.final_intercept
+            + model.final_w_quant * quant_total
+            + model.final_w_qual * qual_total
+        )
+    else:
+        final_score = quant_total + qual_total
+
     return ScoreResult(
         iso3=iso3,
         segment=model.segment,
-        final_score=quant_total + qual_total,
+        final_score=final_score,
         quant_score=quant_total,
         qual_score=qual_total,
         driver_scores=tuple(driver_scores),

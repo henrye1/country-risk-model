@@ -63,3 +63,30 @@ def test_score_country_errors_on_missing_driver():
 
     with pytest.raises(ValueError, match="missing driver"):
         score_country(iso3="USA", model=model, inputs=inputs)
+
+
+def test_score_country_uses_blending_when_present():
+    """When final_intercept/w_quant/w_qual are set, final_score should use the
+    blending Ridge formula rather than the additive fallback."""
+    from dataclasses import replace
+
+    base = _toy_model()
+    blended = replace(
+        base,
+        final_intercept=10.0,
+        final_w_quant=0.5,
+        final_w_qual=0.25,
+    )
+    inputs = (
+        DriverInput(variable_code="gdp_capita", raw_value=15000.0),  # quant_total = 2.0
+        DriverInput(variable_code="pr",         raw_value=5.0),      # qual contrib = 25
+        DriverInput(variable_code="rol",        raw_value=1.0),      # qual contrib = -3
+        # qual_total = 50 (intercept) + 25 - 3 = 72
+    )
+    result = score_country(iso3="USA", model=blended, inputs=inputs)
+
+    # final = intercept + w_quant * quant + w_qual * qual = 10 + 0.5*2.0 + 0.25*72 = 29.0
+    assert math.isclose(result.final_score, 29.0)
+    # Quant + qual scores themselves are unchanged.
+    assert math.isclose(result.quant_score, 2.0)
+    assert math.isclose(result.qual_score, 72.0)
