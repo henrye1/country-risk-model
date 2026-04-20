@@ -12,6 +12,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-3 text-sm">
           <nav className="flex gap-3">
             <Link to="/countries" className="text-slate-700 hover:underline">Countries</Link>
+            <Link to="/admin/models" className="text-slate-700 hover:underline">Models</Link>
           </nav>
           {user && (
             <button
