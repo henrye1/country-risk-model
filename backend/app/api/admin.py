@@ -49,6 +49,26 @@ def _require_internal(user: CurrentUser = Depends(get_current_user)) -> CurrentU
     return user
 
 
+def _require_owner(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Role gate: caller must be an internal_owner (the only role allowed to
+    train, approve, activate, or retire models)."""
+    client = service_client()
+    resp = (
+        client.table("memberships")
+        .select("role, organisations(status)")
+        .eq("user_id", str(user.user_id))
+        .limit(1)
+        .execute()
+    )
+    if not resp.data:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="no membership")
+    row = resp.data[0]
+    org_status = (row.get("organisations") or {}).get("status")
+    if org_status != "internal" or row.get("role") != "internal_owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="internal_owner role required")
+    return user
+
+
 @router.post("/ingest/world-bank", response_model=IngestResultOut)
 def ingest_world_bank(
     req: WorldBankIngestRequest,
