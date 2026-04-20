@@ -118,6 +118,35 @@ export const PublishedSnapshot = z.object({
 });
 export type PublishedSnapshot = z.infer<typeof PublishedSnapshot>;
 
+// --- Peer analysis ---
+
+export const PeerStat = z.object({
+  variable_code: z.string(),
+  variable_name: z.string(),
+  country_value: z.number().nullable(),
+  n_peers: z.number(),
+  peer_min: z.number(),
+  peer_max: z.number(),
+  peer_mean: z.number(),
+  peer_std: z.number(),
+  peer_p10: z.number(),
+  peer_p25: z.number(),
+  peer_median: z.number(),
+  peer_p75: z.number(),
+  peer_p90: z.number(),
+  country_percentile: z.number().nullable(),
+});
+export type PeerStat = z.infer<typeof PeerStat>;
+
+export const PeerAnalysis = z.object({
+  iso3: z.string(),
+  name: z.string(),
+  segment: z.string(),
+  snapshot_id: z.string().uuid().nullable(),
+  rows: z.array(PeerStat),
+});
+export type PeerAnalysis = z.infer<typeof PeerAnalysis>;
+
 // --- Model versions (admin) ---
 
 export const ModelVersion = z.object({
@@ -176,6 +205,8 @@ export const api = {
     ),
   getCountryHistory: (iso3: string) =>
     request(`/v1/countries/${iso3}/history`, z.array(HistoryPoint)),
+  getCountryPeerAnalysis: (iso3: string) =>
+    request(`/v1/countries/${iso3}/peer-analysis`, PeerAnalysis),
   listSnapshots: () => request("/v1/snapshots", z.array(PublishedSnapshot)),
 
   // Model lifecycle

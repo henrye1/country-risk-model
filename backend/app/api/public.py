@@ -11,10 +11,11 @@ from app.core.auth import get_current_user
 from app.core.supabase import user_client
 from app.repositories.published_score import PublishedScoreRepository
 from app.repositories.reference import ReferenceRepository
-from app.schemas.country import CountryOut, CountryScoreOut, CountrySummaryOut
+from app.schemas.country import CountryOut, CountryScoreOut, CountrySummaryOut, PeerAnalysisOut, PeerStatOut
 from app.schemas.snapshot import DriverBreakdownOut, HistoryPointOut, PublishedSnapshotOut
 from app.schemas.user import CurrentUser
 from app.schemas.variable import VariableOut
+from app.services.peer_analysis import build_peer_analysis
 
 router = APIRouter(prefix="/v1", tags=["public"])
 
@@ -242,3 +243,60 @@ def get_snapshot_scores(
             model_version_nodata=UUID(snap["model_version_nodata"]) if snap.get("model_version_nodata") else None,
         ))
     return out
+
+
+@router.get("/countries/{iso3}/peer-analysis", response_model=PeerAnalysisOut)
+def get_country_peer_analysis(
+    iso3: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> PeerAnalysisOut:
+    """Per-driver and predicted-score peer comparison for the country, against
+    the training cohort of its segment. Uses the latest published score for
+    'this country's value' (drivers and final score)."""
+    ref_repo = ReferenceRepository(user_client(user.raw_jwt))
+    pub_repo = PublishedScoreRepository(user_client(user.raw_jwt))
+
+    countries = {c.iso3: c for c in ref_repo.list_countries()}
+    c = countries.get(iso3.upper())
+    if not c:
+        raise HTTPException(status_code=_status.HTTP_404_NOT_FOUND, detail=f"country '{iso3}' not found")
+
+    # We need a latest published score for this country to determine segment +
+    # current driver values + predicted final_score.
+    snap = pub_repo.latest_published_snapshot()
+    if snap is None:
+        raise HTTPException(status_code=_status.HTTP_404_NOT_FOUND, detail="no published snapshot yet")
+
+    score_row = pub_repo.score_for_country_in_snapshot(UUID(snap["id"]), c.iso3)
+    if score_row is None:
+        raise HTTPException(
+            status_code=_status.HTTP_404_NOT_FOUND,
+            detail=f"country '{iso3}' has no score in the latest snapshot",
+        )
+
+    drivers_rows = pub_repo.drivers_for_country_in_snapshot(UUID(snap["id"]), c.iso3)
+    driver_codes = [r["variable_code"] for r in drivers_rows]
+    driver_names: dict[str, str] = {}
+    country_driver_values: dict[str, float | None] = {}
+    for r in drivers_rows:
+        var_meta = r.get("variables") or {}
+        driver_names[r["variable_code"]] = var_meta.get("name") or r["variable_code"]
+        country_driver_values[r["variable_code"]] = (
+            float(r["raw_value"]) if r.get("raw_value") is not None else None
+        )
+
+    rows = build_peer_analysis(
+        segment=score_row["segment"],
+        driver_codes=driver_codes,
+        driver_names=driver_names,
+        country_driver_values=country_driver_values,
+        country_final_score=float(score_row["final_score"]),
+    )
+
+    return PeerAnalysisOut(
+        iso3=c.iso3,
+        name=c.name,
+        segment=score_row["segment"],
+        snapshot_id=UUID(snap["id"]),
+        rows=[PeerStatOut(**r.__dict__) for r in rows],
+    )

@@ -44,3 +44,30 @@ class CountryScoreOut(BaseModel):
     model_version_high: UUID | None
     model_version_low: UUID | None
     model_version_nodata: UUID | None
+
+
+class PeerStatOut(BaseModel):
+    """Per-driver (or predicted-score) stats: where this country sits within
+    the training cohort for its segment."""
+    variable_code: str
+    variable_name: str
+    country_value: float | None
+    n_peers: int
+    peer_min: float
+    peer_max: float
+    peer_mean: float
+    peer_std: float
+    peer_p10: float
+    peer_p25: float
+    peer_median: float
+    peer_p75: float
+    peer_p90: float
+    country_percentile: float | None
+
+
+class PeerAnalysisOut(BaseModel):
+    iso3: str
+    name: str
+    segment: str
+    snapshot_id: UUID | None
+    rows: list[PeerStatOut]
