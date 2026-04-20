@@ -13,7 +13,6 @@ from datetime import date as _date
 from uuid import UUID
 from app.repositories.segment import SegmentRepository
 from app.repositories.snapshot import DraftSnapshotCreate, SnapshotRepository
-from app.repositories.model_version import ModelVersionRepository
 from app.schemas.snapshot import (
     ComputeSummaryOut,
     CreateSnapshotRequest,
@@ -23,6 +22,10 @@ from app.schemas.snapshot import (
     SnapshotOut,
 )
 from app.services.snapshot import SnapshotService
+from fastapi import Response
+from app.schemas.model import ModelVersionOut, TrainModelRequest, TrainResultOut
+from app.services.training import load_training_rows, train_segment
+from app.services.training_diagnostics import generate_csv, generate_xlsx
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -187,3 +190,126 @@ def archive_snapshot(
     service = _snapshot_service()
     row = service.archive(snapshot_id)
     return SnapshotOut(**row)
+
+
+# --- Model lifecycle ---
+
+@router.post("/model-versions", response_model=TrainResultOut, status_code=status.HTTP_201_CREATED)
+def train_model(
+    req: TrainModelRequest,
+    user: CurrentUser = Depends(_require_owner),
+) -> TrainResultOut:
+    repo = ModelVersionRepository(service_client())
+    try:
+        result = train_segment(
+            repo=repo,
+            segment=req.segment,  # type: ignore[arg-type]
+            quant_codes=tuple(req.quant_codes),
+            qual_codes=tuple(req.qual_codes),
+            notes=req.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return TrainResultOut(
+        model_version_id=result.model_version_id,
+        segment=result.segment,
+        fit_metrics=result.fit_metrics,
+        n_training_rows=result.n_training_rows,
+    )
+
+
+@router.get("/model-versions", response_model=list[ModelVersionOut])
+def list_models(user: CurrentUser = Depends(_require_internal)) -> list[ModelVersionOut]:
+    repo = ModelVersionRepository(service_client())
+    return [ModelVersionOut(**r) for r in repo.list()]
+
+
+@router.get("/model-versions/{model_version_id}", response_model=ModelVersionOut)
+def get_model(
+    model_version_id: UUID,
+    user: CurrentUser = Depends(_require_internal),
+) -> ModelVersionOut:
+    repo = ModelVersionRepository(service_client())
+    row = repo.get(model_version_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model_version not found")
+    return ModelVersionOut(**row)
+
+
+@router.post("/model-versions/{model_version_id}/approve", response_model=ModelVersionOut)
+def approve_model(
+    model_version_id: UUID,
+    user: CurrentUser = Depends(_require_owner),
+) -> ModelVersionOut:
+    repo = ModelVersionRepository(service_client())
+    try:
+        row = repo.set_status(model_version_id, "approved")
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ModelVersionOut(**row)
+
+
+@router.post("/model-versions/{model_version_id}/activate", response_model=ModelVersionOut)
+def activate_model(
+    model_version_id: UUID,
+    user: CurrentUser = Depends(_require_owner),
+) -> ModelVersionOut:
+    repo = ModelVersionRepository(service_client())
+    try:
+        row = repo.set_status(model_version_id, "active")
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ModelVersionOut(**row)
+
+
+@router.post("/model-versions/{model_version_id}/retire", response_model=ModelVersionOut)
+def retire_model(
+    model_version_id: UUID,
+    user: CurrentUser = Depends(_require_owner),
+) -> ModelVersionOut:
+    repo = ModelVersionRepository(service_client())
+    try:
+        row = repo.set_status(model_version_id, "retired")
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ModelVersionOut(**row)
+
+
+@router.get("/model-versions/{model_version_id}/diagnostics.csv")
+def download_diagnostics_csv(
+    model_version_id: UUID,
+    user: CurrentUser = Depends(_require_internal),
+) -> Response:
+    repo = ModelVersionRepository(service_client())
+    row = repo.get(model_version_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model_version not found")
+    model = repo.load(model_version_id)
+    rows = load_training_rows(row["segment"])
+    body = generate_csv(model, rows)
+    fname = f"diagnostics_{row['segment']}_{model_version_id}.csv"
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/model-versions/{model_version_id}/diagnostics.xlsx")
+def download_diagnostics_xlsx(
+    model_version_id: UUID,
+    user: CurrentUser = Depends(_require_internal),
+) -> Response:
+    repo = ModelVersionRepository(service_client())
+    row = repo.get(model_version_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="model_version not found")
+    model = repo.load(model_version_id)
+    rows = load_training_rows(row["segment"])
+    body = generate_xlsx(model, rows)
+    fname = f"diagnostics_{row['segment']}_{model_version_id}.xlsx"
+    return Response(
+        content=body,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
