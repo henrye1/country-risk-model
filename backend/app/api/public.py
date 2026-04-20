@@ -182,3 +182,63 @@ def get_country_history(
             bucket_band=r.get("bucket_band"),
         ))
     return out
+
+
+@router.get("/snapshots", response_model=list[PublishedSnapshotOut])
+def list_published_snapshots(
+    user: CurrentUser = Depends(get_current_user),
+) -> list[PublishedSnapshotOut]:
+    pub_repo = PublishedScoreRepository(user_client(user.raw_jwt))
+    rows = pub_repo.list_published_snapshots(limit=100)
+    return [PublishedSnapshotOut(**r) for r in rows]
+
+
+@router.get("/snapshots/{snapshot_id}", response_model=PublishedSnapshotOut)
+def get_published_snapshot_detail(
+    snapshot_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+) -> PublishedSnapshotOut:
+    pub_repo = PublishedScoreRepository(user_client(user.raw_jwt))
+    snap = pub_repo.get_published_snapshot(snapshot_id)
+    if snap is None:
+        raise HTTPException(status_code=_status.HTTP_404_NOT_FOUND, detail="snapshot not found or not published")
+    return PublishedSnapshotOut(**snap)
+
+
+@router.get("/snapshots/{snapshot_id}/scores", response_model=list[CountryScoreOut])
+def get_snapshot_scores(
+    snapshot_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+) -> list[CountryScoreOut]:
+    ref_repo = ReferenceRepository(user_client(user.raw_jwt))
+    pub_repo = PublishedScoreRepository(user_client(user.raw_jwt))
+
+    snap = pub_repo.get_published_snapshot(snapshot_id)
+    if snap is None:
+        raise HTTPException(status_code=_status.HTTP_404_NOT_FOUND, detail="snapshot not found or not published")
+
+    countries = {c.iso3: c for c in ref_repo.list_countries()}
+    rows = pub_repo.scores_for_snapshot(snapshot_id)
+
+    out: list[CountryScoreOut] = []
+    for r in rows:
+        c = countries.get(r["iso3"])
+        if c is None:
+            continue  # orphaned score row; skip
+        out.append(CountryScoreOut(
+            iso3=c.iso3,
+            name=c.name,
+            segment=r["segment"],
+            final_score=float(r["final_score"]),
+            quant_score=float(r["quant_score"]),
+            qual_score=float(r["qual_score"]),
+            bucket_band=r.get("bucket_band"),
+            snapshot_id=UUID(snap["id"]),
+            snapshot_name=snap["name"],
+            as_of_date=snap["as_of_date"],
+            published_at=snap["published_at"],
+            model_version_high=UUID(snap["model_version_high"]) if snap.get("model_version_high") else None,
+            model_version_low=UUID(snap["model_version_low"]) if snap.get("model_version_low") else None,
+            model_version_nodata=UUID(snap["model_version_nodata"]) if snap.get("model_version_nodata") else None,
+        ))
+    return out
