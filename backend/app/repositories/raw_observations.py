@@ -87,3 +87,32 @@ class RawObservationRepository:
         """
         resp = self._client.table("countries").select("iso3").execute()
         return {row["iso3"] for row in resp.data}
+
+    def fetch_observations_up_to_year(self, max_year: int) -> list[dict]:
+        """Return every raw observation whose year <= max_year and value is not null.
+
+        Returned dicts contain iso3, variable_code, year, value, ingested_at.
+        Callers reduce to "latest per (iso3, variable_code)" in Python.
+        """
+        # Supabase-py: paginate to get all rows (range fetch).
+        all_rows: list[dict] = []
+        page_size = 1000
+        start = 0
+        while True:
+            resp = (
+                self._client.table("raw_observations")
+                .select("iso3, variable_code, year, value, ingested_at")
+                .lte("year", max_year)
+                .not_.is_("value", "null")
+                .order("ingested_at", desc=True)
+                .range(start, start + page_size - 1)
+                .execute()
+            )
+            batch = resp.data
+            if not batch:
+                break
+            all_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            start += page_size
+        return all_rows
