@@ -52,3 +52,39 @@ class DiffOut(BaseModel):
     snapshot_id: UUID
     previous_snapshot_id: UUID | None
     rows: list[DiffRowOut]
+
+
+class PublishedSnapshotOut(BaseModel):
+    id: UUID
+    name: str
+    as_of_date: date
+    status: str
+    model_version_high: UUID | None
+    model_version_low: UUID | None
+    model_version_nodata: UUID | None
+    published_at: datetime
+    published_notes: str | None = None
+
+
+class HistoryPointOut(BaseModel):
+    snapshot_id: UUID
+    snapshot_name: str
+    as_of_date: date
+    published_at: datetime
+    segment: str
+    final_score: float
+    quant_score: float
+    qual_score: float
+    bucket_band: str | None
+
+
+class DriverBreakdownOut(BaseModel):
+    variable_code: str
+    variable_name: str
+    category: str
+    direction: str
+    is_quantitative: bool
+    raw_value: float | None
+    standardised_value: float | None
+    bucket_score: float | None
+    contribution: float
