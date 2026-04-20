@@ -23,6 +23,7 @@ from app.schemas.snapshot import (
 )
 from app.services.snapshot import SnapshotService
 from fastapi import Response
+from app.repositories.model_version import ModelVersionRepository
 from app.schemas.model import ModelVersionOut, TrainModelRequest, TrainResultOut
 from app.services.training import load_training_rows, train_segment
 from app.services.training_diagnostics import generate_csv, generate_xlsx
