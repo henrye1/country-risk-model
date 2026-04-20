@@ -158,3 +158,35 @@ class ModelVersionRepository:
             final_w_quant=final_w_quant,
             final_w_qual=final_w_qual,
         )
+
+    def list(self) -> list[dict]:
+        """All model versions, newest first."""
+        resp = (
+            self._client.table("model_versions")
+            .select("id, segment, status, trained_at, training_notes, training_data_hash, fit_metrics_json")
+            .order("trained_at", desc=True)
+            .execute()
+        )
+        return resp.data
+
+    def get(self, model_version_id: UUID) -> dict | None:
+        resp = (
+            self._client.table("model_versions")
+            .select("id, segment, status, trained_at, training_notes, training_data_hash, fit_metrics_json")
+            .eq("id", str(model_version_id))
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+
+    def set_status(self, model_version_id: UUID, new_status: str) -> dict:
+        """Transition the model_version's status. The DB trigger enforces validity."""
+        resp = (
+            self._client.table("model_versions")
+            .update({"status": new_status})
+            .eq("id", str(model_version_id))
+            .execute()
+        )
+        if not resp.data:
+            raise ValueError(f"no model_version with id {model_version_id}")
+        return resp.data[0]
