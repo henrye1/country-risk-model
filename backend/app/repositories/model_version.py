@@ -34,7 +34,7 @@ class ModelVersionRepository:
             "training_notes": training_notes,
             "training_data_hash": trained.training_data_hash,
             "fit_metrics_json": trained.fit_metrics,
-            "status": "active",
+            "status": "pending_review",
         }).execute()
         version_id = inserted.data[0]["id"]
 
