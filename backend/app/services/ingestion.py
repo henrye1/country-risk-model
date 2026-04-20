@@ -13,7 +13,9 @@ class UnknownVariable(ValueError):
 
 
 class WBClientProtocol(Protocol):
-    def fetch_indicator_for_year(self, indicator_id: str, year: int) -> dict[str, float | None]: ...
+    def fetch_indicator(
+        self, indicator_id: str, start_year: int, end_year: int
+    ) -> list[tuple[str, int, float | None]]: ...
 
 
 class RawObsRepoProtocol(Protocol):
@@ -30,11 +32,15 @@ class IngestionService:
     def ingest_world_bank(
         self,
         variable_codes: list[str],
-        year: int,
+        start_year: int,
+        end_year: int,
         user_id: UUID | None,
         notes: str | None,
     ) -> IngestResultOut:
-        # Validate all variable codes up front.
+        """Fetch one WB indicator per variable across the year range, persist.
+
+        If start_year == end_year it behaves like the old single-year path.
+        """
         for code in variable_codes:
             if code not in WORLD_BANK_SOURCES:
                 raise UnknownVariable(f"variable '{code}' has no World Bank mapping")
@@ -57,12 +63,12 @@ class IngestionService:
         for code in variable_codes:
             source_tag, indicator_id = WORLD_BANK_SOURCES[code]
             try:
-                data = self._wb.fetch_indicator_for_year(indicator_id, year)
+                triples = self._wb.fetch_indicator(indicator_id, start_year, end_year)
             except Exception as exc:
                 warnings.append(f"{code}: fetch failed — {exc}")
                 continue
 
-            for iso3, value in data.items():
+            for iso3, obs_year, value in triples:
                 if iso3 not in known_iso3:
                     skipped_unknown += 1
                     continue
@@ -72,7 +78,7 @@ class IngestionService:
                 rows.append(ObservationRow(
                     iso3=iso3,
                     variable_code=code,
-                    year=year,
+                    year=obs_year,
                     value=value,
                     source=source_tag,
                 ))
@@ -82,7 +88,7 @@ class IngestionService:
         return IngestResultOut(
             upload_id=upload_id,
             source=first_source,
-            year=year,
+            year=end_year,  # response summary reports the latest year; full range is in `notes`
             variables_ingested=list(variable_codes),
             rows_inserted=inserted,
             rows_skipped_unknown_country=skipped_unknown,

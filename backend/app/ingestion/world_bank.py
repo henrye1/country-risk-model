@@ -35,21 +35,34 @@ class WorldBankClient:
         indicator_id: str,
         year: int,
     ) -> dict[str, float | None]:
-        """Return {iso3: value} for every country with a reported observation.
+        """Convenience wrapper: return {iso3: value} for a single year."""
+        triples = self.fetch_indicator(indicator_id, start_year=year, end_year=year)
+        return {iso3: value for iso3, _year, value in triples}
 
-        Countries absent from the response are simply not in the returned dict.
-        Values reported as null by the WB API are kept as None in the dict.
+    def fetch_indicator(
+        self,
+        indicator_id: str,
+        start_year: int,
+        end_year: int,
+    ) -> list[tuple[str, int, float | None]]:
+        """Return (iso3, year, value) tuples for every country-year in range.
 
-        Raises `IndicatorArchivedError` if the WB API reports the indicator has
-        been deleted or archived (shape: `[{"message": [...]}]`). Callers are
-        expected to treat this as a soft warning, not a batch-aborting error.
+        Uses the WB API's native date range (`date=YYYY:YYYY`) so one logical
+        call covers many years. Pagination is still followed. Country-years
+        with null values are kept with value=None.
+
+        Raises `IndicatorArchivedError` if the WB API reports the indicator
+        has been deleted or archived.
         """
-        out: dict[str, float | None] = {}
+        if end_year < start_year:
+            raise ValueError(f"end_year ({end_year}) < start_year ({start_year})")
+
+        out: list[tuple[str, int, float | None]] = []
         page = 1
         while True:
             params = {
                 "format": "json",
-                "date": str(year),
+                "date": f"{start_year}:{end_year}",
                 "per_page": str(self.per_page),
                 "page": str(page),
             }
@@ -99,8 +112,16 @@ class WorldBankClient:
                 iso3 = row.get("countryiso3code")
                 if not iso3:
                     continue
+                date_str = row.get("date")
+                try:
+                    year = int(date_str) if date_str is not None else None
+                except (TypeError, ValueError):
+                    year = None
+                if year is None:
+                    continue
                 val = row.get("value")
-                out[iso3] = float(val) if isinstance(val, (int, float)) else None
+                parsed = float(val) if isinstance(val, (int, float)) else None
+                out.append((iso3, year, parsed))
 
             total_pages = int(meta.get("pages", 1))
             if page >= total_pages:

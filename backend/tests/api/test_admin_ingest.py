@@ -21,10 +21,15 @@ def _token(user_id: str = "11111111-1111-1111-1111-111111111111") -> str:
 
 class _FakeWB:
     def __init__(self) -> None:
-        self.payloads = {("NY.GDP.PCAP.CD", 2021): {"USA": 70000.0, "ZAF": 6000.0}}
+        self.payloads = {
+            ("NY.GDP.PCAP.CD", 2021, 2021): [
+                ("USA", 2021, 70000.0),
+                ("ZAF", 2021, 6000.0),
+            ]
+        }
 
-    def fetch_indicator_for_year(self, indicator_id, year):
-        return self.payloads[(indicator_id, year)]
+    def fetch_indicator(self, indicator_id, start_year, end_year):
+        return self.payloads[(indicator_id, start_year, end_year)]
 
 
 class _FakeRepo:

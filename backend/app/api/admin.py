@@ -48,7 +48,8 @@ def ingest_world_bank(
     try:
         return service.ingest_world_bank(
             variable_codes=req.variables,
-            year=req.year,
+            start_year=req.start_year or req.year,
+            end_year=req.end_year or req.year,
             user_id=user.user_id,
             notes=req.notes,
         )

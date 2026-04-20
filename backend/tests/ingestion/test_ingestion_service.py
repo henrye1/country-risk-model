@@ -11,13 +11,20 @@ from app.services.ingestion import (
 
 
 class FakeWBClient:
-    def __init__(self, payloads: dict[tuple[str, int], dict[str, float | None]]) -> None:
-        self._payloads = payloads
-        self.calls: list[tuple[str, int]] = []
+    """Fake client keyed on (indicator_id, start_year, end_year)."""
 
-    def fetch_indicator_for_year(self, indicator_id: str, year: int) -> dict[str, float | None]:
-        self.calls.append((indicator_id, year))
-        return self._payloads[(indicator_id, year)]
+    def __init__(self, payloads: dict[tuple[str, int, int], list[tuple[str, int, float | None]]]) -> None:
+        self._payloads = payloads
+        self.calls: list[tuple[str, int, int]] = []
+
+    def fetch_indicator(
+        self,
+        indicator_id: str,
+        start_year: int,
+        end_year: int,
+    ) -> list[tuple[str, int, float | None]]:
+        self.calls.append((indicator_id, start_year, end_year))
+        return self._payloads[(indicator_id, start_year, end_year)]
 
 
 class FakeRepo:
@@ -42,8 +49,15 @@ class FakeRepo:
 
 def test_ingest_world_bank_maps_variables_and_inserts_rows():
     payloads = {
-        ("NY.GDP.PCAP.CD", 2021): {"USA": 70000.0, "ZAF": 6000.0, "ZZZ": 999.0},
-        ("GOV_WGI_RL.EST", 2021): {"USA": 1.5, "ZAF": 0.2},
+        ("NY.GDP.PCAP.CD", 2021, 2021): [
+            ("USA", 2021, 70000.0),
+            ("ZAF", 2021, 6000.0),
+            ("ZZZ", 2021, 999.0),
+        ],
+        ("GOV_WGI_RL.EST", 2021, 2021): [
+            ("USA", 2021, 1.5),
+            ("ZAF", 2021, 0.2),
+        ],
     }
     wb = FakeWBClient(payloads)
     repo = FakeRepo(known_iso3={"USA", "ZAF"})
@@ -51,7 +65,8 @@ def test_ingest_world_bank_maps_variables_and_inserts_rows():
 
     result = service.ingest_world_bank(
         variable_codes=["gdp_capita", "rol"],
-        year=2021,
+        start_year=2021,
+        end_year=2021,
         user_id=None,
         notes="test pull",
     )
@@ -72,9 +87,15 @@ def test_ingest_world_bank_maps_variables_and_inserts_rows():
     assert all(r.year == 2021 for r in repo.observations)
 
 
-def test_ingest_world_bank_skips_null_values():
+def test_ingest_world_bank_spreads_year_across_observations():
+    """When a range is fetched, each row gets its own year."""
     payloads = {
-        ("NY.GDP.PCAP.CD", 2021): {"USA": None, "ZAF": 6000.0},
+        ("NY.GDP.PCAP.CD", 2019, 2021): [
+            ("USA", 2019, 65000.0),
+            ("USA", 2020, 63000.0),
+            ("USA", 2021, 70000.0),
+            ("ZAF", 2021, 6000.0),
+        ],
     }
     wb = FakeWBClient(payloads)
     repo = FakeRepo(known_iso3={"USA", "ZAF"})
@@ -82,7 +103,32 @@ def test_ingest_world_bank_skips_null_values():
 
     result = service.ingest_world_bank(
         variable_codes=["gdp_capita"],
-        year=2021,
+        start_year=2019,
+        end_year=2021,
+        user_id=None,
+        notes=None,
+    )
+
+    assert result.rows_inserted == 4
+    years = sorted({r.year for r in repo.observations})
+    assert years == [2019, 2020, 2021]
+
+
+def test_ingest_world_bank_skips_null_values():
+    payloads = {
+        ("NY.GDP.PCAP.CD", 2021, 2021): [
+            ("USA", 2021, None),
+            ("ZAF", 2021, 6000.0),
+        ],
+    }
+    wb = FakeWBClient(payloads)
+    repo = FakeRepo(known_iso3={"USA", "ZAF"})
+    service = IngestionService(wb_client=wb, repo=repo)
+
+    result = service.ingest_world_bank(
+        variable_codes=["gdp_capita"],
+        start_year=2021,
+        end_year=2021,
         user_id=None,
         notes=None,
     )
@@ -101,7 +147,8 @@ def test_ingest_world_bank_raises_on_unknown_variable():
     with pytest.raises(UnknownVariable, match="fake_var"):
         service.ingest_world_bank(
             variable_codes=["fake_var"],
-            year=2021,
+            start_year=2021,
+            end_year=2021,
             user_id=None,
             notes=None,
         )
